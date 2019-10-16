@@ -21,7 +21,6 @@ num_channels = -1;
 %2: Perform Fermi apodization and chopping
 xdim = size(raw_data, 1);
 ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);
-%ffilter = fermi(xdim, 0.05*xdim, 0.1*xdim);  % Extra Apod
 %mesh(ffilter);  % this plots the Fermi filter
 filt_data = filterChannelData(raw_data, ffilter, alternate);
 

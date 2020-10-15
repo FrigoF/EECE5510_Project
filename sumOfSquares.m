@@ -20,10 +20,10 @@ function [sos_image] = sumOfSquares(im_data, weights)
     
     wsImage = wsImage.^0.5;
 
-    figure 
-    imagesc(wsImage);
-    colormap('gray');
-    title('Sum of Squares Image');
+    %figure 
+    %imagesc(wsImage);
+    %colormap('gray');
+    %title('Sum of Squares Image');
     
     % scale to max pixel value of 20000
     image_max = max(max(wsImage));

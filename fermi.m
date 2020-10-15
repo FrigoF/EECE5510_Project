@@ -1,7 +1,7 @@
 function ffilter = fermi(xdim, cutoff, trans_width)
 % FERMI creates a 2D Fermi filter.
-%   FFILTER = FERMI(XDIM,CUTOFF,TRANS_WIDTH) calculates a 2D
-%     Fermi filter on a grid with dimensions XDIM * XDIM. 
+%   FFILTER = FERMI(XDIM,YDIM,CUTOFF,TRANS_WIDTH) calculates a 2D
+%     Fermi filter on a grid with dimensions XDIM * YDIM. 
 %    The cutoff frequency is defined by CUTOFF and represents
 %     the radius (in pixels) of the circular symmetric function   
 %     at which the amplitude drops below 0.5

@@ -6,6 +6,8 @@
 % Note: This file is a modified version of raw_image.m by Fred Frigo
 %
 % 
+% Fred Frigo   - updated Oct 15, 2020 to support 25.0 and 26.0
+%
 % @param pfile the path to the raw-data file to be read
 % @param slice_no the slice number desired to be read
 % @param the number of channels to be read 1 or -1
@@ -27,7 +29,6 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
         err_msg = sprintf('Unable to locate Pfile %s', pfile)
         return;
     end
-
     % Determine size of Pfile header based on Rev number
     status = fseek(fid, 0, 'bof');
     [f_hdr_value, count] = fread(fid, 1, 'real*4');
@@ -39,27 +40,40 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
     elseif (( rdbm_rev_num > 5.0 ) && (rdbm_rev_num < 6.0)) 
         pfile_header_size = 39940;  % Signa 5.5
     else
-        % In 11.0 (ME2) the header and data are stored as little-endian
+        % In 11.0 and later the header and data are stored as little-endian
         fclose(fid);
         fid = fopen(pfile,'r', 'ieee-le');
         status = fseek(fid, 0, 'bof');
         [f_hdr_value, count] = fread(fid, 1, 'real*4');
-        if (f_hdr_value == 9.0)  % 11.0 product release
+        rdbm_rev_num = f_hdr_value(1);
+        if (rdbm_rev_num == 9.0)  % 11.0 product release
             pfile_header_size= 61464;
-        elseif (f_hdr_value == 11.0)  % 12.0 product release
+        elseif (rdbm_rev_num == 11.0)  % 12.0 product release
             pfile_header_size= 66072;
-        elseif (f_hdr_value > 11.0) & (f_hdr_value < 100.0)  % 14.0 and later
+        elseif (rdbm_rev_num > 11.0) & (rdbm_rev_num < 26.0)  
+            % For 14.0 to 25.0 Pfile header size can be found here
             status = fseek(fid, 1468, 'bof');
-            pfile_header_size = fread(fid,1,'integer*4');     
+            pfile_header_size = fread(fid,1,'integer*4');   
+            status = fseek(fid, 1508, 'bof');
+            prescan_offset = fread(fid,1,'integer*4');
+        elseif ( rdbm_rev_num >= 26.0) & (rdbm_rev_num < 100.0)  % 26.0 to ??
+            % For 26.0 Pfile header size moved to location just after rev num
+            status = fseek(fid, 4, 'bof');
+            pfile_header_size = fread(fid,1,'integer*4');
+            status = fseek(fid, 44, 'bof');
+            prescan_offset = fread(fid,1,'integer*4');
         else
-            err_msg = sprintf('Invalid Pfile header revision: %f', f_hdr_value )
+            err_msg = sprintf('Invalid Pfile header revision: %f', rdbm_rev_num )
             return;
         end
-    end
-
-    status = fseek(fid, 0, 'bof');
+    end        
 
     % Read header information
+    if (rdbm_rev_num < 26.0 )
+        status = fseek(fid, 0, 'bof');
+    else
+        status = fseek(fid, 76, 'bof'); % skip 76 bytes of data added for 26.0
+    end
     [hdr_value, count] = fread(fid, 102, 'integer*2');
     rhtype = hdr_value(29);
     npasses = hdr_value(33);
@@ -71,15 +85,36 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
     da_yres = hdr_value(53);
     rc_xres = hdr_value(54);
     rc_yres = hdr_value(55);
-    start_recv = hdr_value(101);
+    start_recv = hdr_value(101); % not used for 25.0 & greater
     stop_recv = hdr_value(102);
-    nreceivers = (stop_recv - start_recv) + 1;
+
+    % Determine number of slices in this Pfile:  this does not work for all cases.
+    slices_in_pass = nslices/npasses;
+
+    % Compute size (in bytes) of each frame, echo and slice
+    data_elements = da_xres*2*(da_yres-1);
+    frame_size = da_xres*2*point_size;
+    echo_size = frame_size*da_yres;
+    slice_size = echo_size*nechoes;
+    mslice_size = slice_size*slices_in_pass;
+
+    % For 24.0 and earlier - nreceivers is determined as follows
+    if (rdbm_rev_num < 25.0)
+        nreceivers = (stop_recv - start_recv) + 1;
+    else % For 25.0 and later - compute nreceivers from number of slices
+        status = fseek(fid, 0, 'eof');
+        pfile_size = ftell(fid);
+        pass_size = (pfile_size - pfile_header_size)/nslices;
+        nreceivers = pass_size/mslice_size;
+    end
 
     sum_freq = zeros(da_yres-1, da_xres);
 
     % Determine number of slices in this Pfile:  this does not work for all cases.
-    slices_in_pass = nslices/npasses
-
+    slices_in_pass = nslices/npasses; 
+    msg=sprintf('Number of channels = %d, using slice %d of %d', nreceivers, slice_no, slices_in_pass );
+    disp(msg);
+    
     % Compute size (in bytes) of each frame, echo and slice
     data_elements = da_xres*2*(da_yres-1);
     frame_size = da_xres*2*point_size;
@@ -90,7 +125,8 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
     % Enter slice number to plot
     if ( slices_in_pass > 1 )
         if (my_slice > slices_in_pass)
-            err_msg = sprintf('Invalid number of slices. Slice number set to 1.')
+            err_msg = sprintf('Invalid number of slices. Slice number set to 1.');
+            disp(err_msg);
             my_slice = 1;
         end
     end
@@ -108,7 +144,7 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
 
     if ( num_channels == -1 )
         % Zero pad rows
-        raw_frames = zeros(rc_xres, rc_xres, nreceivers);
+        raw_frames = zeros(rc_xres, rc_yres, nreceivers);
     
         for r=1:nreceivers
         % Compute offset in bytes to start of frame.  (skip baseline view)
@@ -137,7 +173,7 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
     else
        
         % Zero pad rows
-        raw_frames = zeros(rc_xres, rc_xres, 1);
+        raw_frames = zeros(rc_xres, rc_yres, 1);
         my_receiver = 1;
         if ( nreceivers > 1 )
             recv_msg = sprintf('Enter the receiver number: [1..%d]',nreceivers);

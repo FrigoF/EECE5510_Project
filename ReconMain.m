@@ -52,8 +52,6 @@ weights = read_weights(pfile);
 %6: calculate sum_square image
 sos_image = sumOfSquares(im_data, weights);
 
-%7: Read corner points & apply gradwarp
-% final_image = gradwarp( sos_image, pfile);
 %7: Resize image if necessary
 zip_factor =1;
 final_image = resize_image( sos_image, pfile, zip_factor);

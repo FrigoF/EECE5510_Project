@@ -52,13 +52,11 @@ final_image = resize_image( sos_image, pfile, zip_factor);
 %8: Read DICOM image file to obtain DICOM header info 
 % Enter name of Pfile
 dfile = "";
-dfile = 'e31s3i11';
+dfile = 'e31s3i11.dcm';
 if(dfile == "")
     [fname, pname] = uigetfile('*.*', 'Select DICOM image File');
     dfile = strcat(pname, fname);
 end
-
-dfile = 'e31s3i11.dcm';
 
 % Get DICOM info from input image.
 info1 = dicominfo(dfile);

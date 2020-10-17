@@ -30,10 +30,7 @@ ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);
 %mesh(ffilter);  % this plots the Fermi filter
 filt_data = filterChannelData(raw_data, ffilter, alternate);
 
-% display the k-space magnitude 
-displayMagnitude(filt_data, 'K-space log-magnitude', 1);
-
-%3: Transform to image domain
+%3: Transform to image domain & plot magnitude of Kspace
 im_data = pifftChannelData(filt_data);
 
 %4: Display the image magnitude for each channel

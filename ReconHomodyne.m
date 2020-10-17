@@ -1,4 +1,4 @@
-% ReconMain.m - MR image reconstruction from Pfile
+% ReconHomodyne.m - MR image reconstruction from Pfile
 % Marquette University
 % EECE 4510/5510
 %

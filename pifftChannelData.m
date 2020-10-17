@@ -9,15 +9,18 @@ function im_data = pifftChannelData(raw_frames)
 %            Fred J. Frigo - modified to call homodyne function pifft
 % 
     im_data = zeros(size(raw_frames));
+    partial_data = zeros(size(raw_frames));
     [yres, xres, chan] = size(raw_frames);
     start_data = 1;
-    end_data = (yres*0.5) + 16 +1;  % use 16 overscans
+    end_data = (yres*0.5) + 16;  % use 16 overscans
 
- 
     for i=1:chan
         % im_data(:,:,i) = ifft2(raw_frames(:,:,i));
-        partial_data(:,:) = raw_frames(start_data:end_data,:,i);
-        homodyne_image = pifft(partial_data);
+        partial_data(start_data:end_data,:,i) = raw_frames(start_data:end_data,:,i);
+        homodyne_image = pifft(partial_data(:,:,i));
         im_data(:,:,i) = homodyne_image(:,:);
     end
+    
+    % display the k-space magnitude 
+    displayMagnitude(partial_data, 'K-space log-magnitude', 1);
 end

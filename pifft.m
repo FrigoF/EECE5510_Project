@@ -49,7 +49,8 @@ pksp = ifft(pksp,[],2);
 [Npp Nf] = size(pksp);
 
 % Number of phase encodes in the full k-space
-Np = 2^nextpow2(Npp+1);
+%Np = 2^nextpow2(Npp+1); 
+Np = 2^nextpow2(Npp); % Updated by Fred Frigo 15-Oct-20
 
 % Number of high frequency phase encodes
 NH = Np-Npp;

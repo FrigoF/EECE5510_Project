@@ -5,7 +5,7 @@
 % Fred J. Frigo
 % Oct 17, 2017
 % Oct 27, 2017 - use Hamming window for apodization
-% Oct 15, 2020 - Gradwarp
+% Oct 15, 2020 - Resize Final Image if necessary
 
 % Enter name of Pfile
 pfile = "";

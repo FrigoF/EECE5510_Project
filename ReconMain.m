@@ -31,6 +31,7 @@ ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);
 %for k=1:xdim
 %    ffilter(k,:)=ones(1,xdim);
 %end
+figure;
 mesh(ffilter);  % this plots the apodization filter
 filt_data = filterChannelData(raw_data, ffilter, alternate);
 

@@ -16,7 +16,6 @@ end
 
 slice_no = 6;
 num_channels = -1;
-zip_factor = 4; % Zero pad by factor of 4
 
 %1: Read Pfile containing the raw data for each channel
 % if num_channels == -1, it will read all the receiver channels.
@@ -35,8 +34,8 @@ mesh(ffilter);  % this plots the apodization filter
 filt_data = filterChannelData(raw_data, ffilter, alternate);
 
 %2.5: Zero Pad by zip_factor 
+zip_factor = 4; % Zero pad by factor of 4
 [dayres, daxres, num_chan] = size(filt_data);
-zip_factor = 4; 
 ZP_data = zeros(dayres*zip_factor, daxres*zip_factor, num_chan);
 ZP_data(1:dayres,1:daxres,:) = filt_data(1:dayres,1:daxres,:);
 

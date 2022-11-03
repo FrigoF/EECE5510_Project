@@ -74,7 +74,7 @@ info.InstanceNumber = image_number1;
 info.SeriesInstanceUID = dicomuid;  %generate a new DICOM UID for new series
 
 % Create name of NEW DICOM file to create
-new_dfile = strcat('e',info.StudyID,'s',int2str(info.SeriesNumber),'i', int2str(info.InstanceNumber), '.new');
+new_dfile = strcat('e',info.StudyID,'s',int2str(info.SeriesNumber),'i', int2str(info.InstanceNumber), '.dcm');
   
 % Create the new DICOM image  
 result = dicomwrite(final_image,new_dfile,info,'CreateMode','copy');

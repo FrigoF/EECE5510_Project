@@ -26,10 +26,10 @@ num_channels = -1;
 
 %2: Perform Fermi apodization and chopping
 xdim = size(raw_data, 1);
-ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);
+ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);  % For alt, try fermi( xdim, 0.1*xdim, 0.01*xdim)
 %ffilter = zeros(xdim);
 %for k=1:xdim
-%    ffilter(k,:)=ones(1,xdim);
+%    ffilter(k,:)=hamming(1,xdim);
 %end
 figure;
 mesh(ffilter);  % this plots the apodization filter
@@ -87,7 +87,7 @@ info.InstanceNumber = image_number1;
 info.SeriesInstanceUID = dicomuid;  %generate a new DICOM UID for new series
 
 % Create name of NEW DICOM file to create
-new_dfile = strcat('e',info.StudyID,'s',int2str(info.SeriesNumber),'i', int2str(info.InstanceNumber), '.new');
+new_dfile = strcat('e',info.StudyID,'s',int2str(info.SeriesNumber),'i', int2str(info.InstanceNumber), '.dcm');
   
 % Create the new DICOM image  
 result = dicomwrite(final_image,new_dfile,info,'CreateMode','copy');

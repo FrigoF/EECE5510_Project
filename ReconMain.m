@@ -29,7 +29,7 @@ xdim = size(raw_data, 1);
 ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);  % For alt, try fermi( xdim, 0.1*xdim, 0.01*xdim)
 %ffilter = zeros(xdim);
 %for k=1:xdim
-%    ffilter(k,:)=hamming(1,xdim);
+%    ffilter(k,:)=hamming(xdim);
 %end
 figure;
 mesh(ffilter);  % this plots the apodization filter

@@ -20,7 +20,9 @@ function displayPhase(raw_frames, plotString)
         for j=1:num_rows
             unwrap_phase(j,:)=unwrap(mask_phase(j,:));
         end
-        subplot(2,4,i);
+        if (num_frames > 1) % for multi-coil, plot each channel image
+            subplot(2,4,i);
+        end
         imagesc(unwrap_phase.*mask_image);
         colormap('jet');
         title(sprintf('%s, receiver %d', plotString, i));

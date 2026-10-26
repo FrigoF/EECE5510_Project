@@ -113,9 +113,10 @@ function [weights] = read_weights( pfile )
     avg_rec_std = sum(receiver_weights)./size(receiver_weights,1);
     weights = receiver_weights./avg_rec_std;
 
-   if( num_receivers > 1 )
-      figure;
-      plot(weights);
-      title('Receiver Weights');
-   end
+    debug_weights = 0;
+    if( num_receivers > 1 ) & (debug_weights == 1)
+       figure;
+       plot(weights);
+       title('Receiver Weights');
+    end
 end

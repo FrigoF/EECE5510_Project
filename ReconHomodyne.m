@@ -6,79 +6,80 @@
 % Oct 17, 2017
 % Oct 25, 2017 - modified for homodyne
 % Oct 15, 2020 - Resize Final Image if necessary
+% Mar 01, 2026 - Add Gradwarp correction
 
 % Enter name of Pfile
 pfile = "";
-pfile = 'P20992.7';
 if(pfile == "")
     [fname, pname] = uigetfile('*.*', 'Select Pfile');
     pfile = strcat(pname, fname);
 end
 
-slice_no = 6;
-num_channels = -1;
+slice_no = 6;   % specify slice number if multiple slices are present
 
 %1: Read Pfile containing the raw data for each channel
-% if num_channels == -1, it will read all the receiver channels.
-% if num_channels == 1, it will prompt you for the specific channel at
-%       the matlab console.
-[raw_data, alternate] = getChannelData(pfile, slice_no, num_channels);
+[raw_data, chop, da_xres, da_yres, gw_coil, corner_points] = getChannelData(pfile, slice_no);
+num_chan = size(raw_data,3);
 
 %2: Perform Fermi apodization and chopping
 xdim = size(raw_data, 1);
-ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);
-%mesh(ffilter);  % this plots the Fermi filter
-filt_data = filterChannelData(raw_data, ffilter, alternate);
+ffilter = fermi(xdim, 0.45*xdim, 0.1*xdim);  % try fermi( xdim, 0.1*xdim, 0.01*xdim)
+figure;
+mesh(ffilter);  % this plots the apodization filter
+filt_data = filterChannelData(raw_data, ffilter, chop, num_chan);
+
+% display the k-space magnitude 
+displayMagnitude(raw_data, 'K-space log-magnitude', 1);
 
 %3: Transform to image domain & plot magnitude of Kspace
 im_data = pifftChannelData(filt_data);
 
 %4: Display the image magnitude for each channel
-displayMagnitude(im_data, 'Image magnitude', 0);
+% displayMagnitude(im_data, 'Image magnitude', 0);
 
-%5: obtain channel weights used in sum of squares combination
-weights = read_weights(pfile);
+%5: Display the image phase for each channel
+%   Note:  homodyne does not preserve phase
+% displayPhase(im_data, 'Image Phase');
 
-%6: calculate sum_square image
+%6: calculate magnitude image
+if (num_chan > 1)
+    % for multi-coil, get coil weights used in sum of squares combination
+    weights = read_weights(pfile);
+else
+    weights = 1.0;
+end
 sos_image = sumOfSquares(im_data, weights);
 
 %7: Resize image if necessary
 zip_factor =1;
-final_image = resize_image( sos_image, pfile, zip_factor);
+mag_image = resize_image( sos_image, da_xres, da_yres, zip_factor);
 
-%8: Read DICOM image file to obtain DICOM header info 
-% Enter name of Pfile
-dfile = "";
-dfile = 'e31s3i11.dcm';
-if(dfile == "")
-    [fname, pname] = uigetfile('*.*', 'Select DICOM image File');
-    dfile = strcat(pname, fname);
-end
+%8: Gradwarp Correct
+gw_coeffs = read_ge_coeff(gw_coil);
+gw_image = gradwarp_2D(mag_image, gw_coeffs, corner_points);
 
-% Get DICOM info from input image.
-info1 = dicominfo(dfile);
-exam = info1.StudyID;
-series = info1.SeriesNumber;
-image_number1 = info1.InstanceNumber;
- 
-% Create a new DICOM image... starting with header from image1
-info = info1;
-  
-info.WindowWidth  = max(max(sos_image));  %default window width for new image
+% Scale image to max pixel of 20000
+image_max = max(max(gw_image));
+scale_factor = 20000/image_max;
+final_image = uint16(gw_image.*scale_factor);
+figure();
+imshow(final_image);
+title("Gradwarp Corrected Homodyne image");
+
+%9 Create the new DICOM image 
+new_dfile = strcat(pfile, "homodyne.dcm");
+result = dicomwrite(final_image, new_dfile);
+info = dicominfo(new_dfile);
+
+% udpate default window width and window level
+info.WindowWidth  = max(max(final_image));  %default window width for new image
 info.WindowCenter = info.WindowWidth/2;  %defautl window level for new image
-  
-% Multiply original series by 100 and add 20 for new series number
-info.StudyID = exam;
-info.SeriesNumber= series*100 + 80;
-info.InstanceNumber = image_number1;
-info.SeriesInstanceUID = dicomuid;  %generate a new DICOM UID for new series
-
-% Create name of NEW DICOM file to create
-new_dfile = strcat('e',info.StudyID,'s',int2str(info.SeriesNumber),'i', int2str(info.InstanceNumber), '.dcm');
-  
-% Create the new DICOM image  
+info.PatientName.FamilyName = fname;
+info.SeriesDescription = 'Gradwarp Corrected Homodyne';
+info.ExamNumber = '1';
+info.SeriesNumber = 1;
 result = dicomwrite(final_image,new_dfile,info,'CreateMode','copy');
 
-msg=sprintf('New dicom file created (Homodyne) = %s', new_dfile);
+msg=sprintf('New dicom file created = %s', new_dfile);
 disp(msg);
 

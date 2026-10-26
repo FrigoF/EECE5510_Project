@@ -7,20 +7,20 @@
 %
 % 
 % Fred Frigo   - updated Oct 15, 2020 to support 25.0 and 26.0
+% Fred Frigo   - updated Feb 22, 2025 gradwarp updates
 %
 % @param pfile the path to the raw-data file to be read
 % @param slice_no the slice number desired to be read
-% @param the number of channels to be read 1 or -1
-%           if 1, you will be prompted for channel
-%           if -1, you will receive all channels
-%
-% @return an array containing 1 or all of the raw data frames
+% 
+% @return raw_frames an array containing raw data frames
+% @return chop flag - negate alternate data elements (fftshift)
+% @return da_xres - data acquisition size is row dimension
+% @return da_yres - data acquisition size in col dimension
+% @return gradcoil - gradient type:  BRM, XRMB, XRMW
+% @return four_corners - 4 image corner points for gradwarp
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-
-function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
-    i = sqrt(-1);
+function [raw_frames, chop, da_xres, da_yres, gradcoil, four_corners] = getChannelData(pfile, slice_no)
     my_slice = slice_no;
 
     % Open Pfile to read reference scan data.
@@ -76,6 +76,7 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
     end
     [hdr_value, count] = fread(fid, 102, 'integer*2');
     rhtype = hdr_value(29);
+    rhformat = hdr_value(30);
     npasses = hdr_value(33);
     nslices = hdr_value(35);
     nechoes = hdr_value(36);
@@ -85,6 +86,7 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
     da_yres = hdr_value(53);
     rc_xres = hdr_value(54);
     rc_yres = hdr_value(55);
+    gradcoil = hdr_value(93);  % Maybe BRM = 5 & XRMW = 0?
     start_recv = hdr_value(101); % not used for 25.0 & greater
     stop_recv = hdr_value(102);
 
@@ -112,8 +114,43 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
 
     % Determine number of slices in this Pfile:  this does not work for all cases.
     slices_in_pass = nslices/npasses; 
-    msg=sprintf('Number of channels = %d, using slice %d of %d', nreceivers, slice_no, slices_in_pass );
+    if (my_slice > slices_in_pass)
+         my_slice = 1;
+    end
+    msg=sprintf('Number of channels = %d, using slice %d of %d', nreceivers, my_slice, slices_in_pass );
     disp(msg);
+
+    % Read image corner points for Gradwarp
+    % Compute offset to where the corner points are stored for this slice
+    file_offset = 2048 - (222*2) - (31*4); % offset to data_acq_table 
+    status = fseek(fid, file_offset, 'bof');
+    slice_info_size = 48;
+    [data_acq_table_offset, count] = fread(fid, 1, 'integer*4');
+    if (data_acq_table_offset == 0) % Legacy
+        data_acq_table_offset = 2048 + 2*4096;  % RDB_HEADER_REC + 2*RDB_PER_PASS_TAB
+        slice_info_size = 44; % RDB_SLICE_INFO_ENTRY is 44 bytes
+    end
+    file_offset = data_acq_table_offset + ((my_slice-1)*slice_info_size) + 4; 
+    status = fseek(fid, file_offset, 'bof');
+    data_elements = 9;
+    [corner_points, count] = fread(fid, data_elements, 'float');
+    P1=[corner_points(2); corner_points(1); corner_points(3)];
+    P2=[corner_points(5); corner_points(4); corner_points(6)];
+    P3=[corner_points(8); corner_points(7); corner_points(9)];
+
+    % Compute the missing corner point from the other 3
+    d12= norm(P1-P2)^2;
+    d23= norm(P2-P3)^2;
+    d31= norm(P3-P1)^2;
+    if d12 > d23 && d12 >d31
+        A=P3; B= P1; C=P2;
+    elseif d23 >d12 && d23 > d31
+        A=P1; B=P2; C=P3;
+    else
+        A=P2; B=P2; C=P1;
+    end
+    D= B + C - A;
+    four_corners = [A,B,C,D]';
     
     % Compute size (in bytes) of each frame, echo and slice
     data_elements = da_xres*2*(da_yres-1);
@@ -122,68 +159,14 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
     slice_size = echo_size*nechoes;
     mslice_size = slice_size*slices_in_pass;
 
-    % Enter slice number to plot
-    if ( slices_in_pass > 1 )
-        if (my_slice > slices_in_pass)
-            err_msg = sprintf('Invalid number of slices. Slice number set to 1.');
-            disp(err_msg);
-            my_slice = 1;
-        end
-    end
-
-    % Enter echo number to plot
+    % Select first echo
     my_echo = 1;
-    if ( nechoes > 1 )
-        echo_msg = sprintf('Enter the echo number: [1..%d]',nechoes);
-        my_echo = input(echo_msg);
-        if (my_echo > nechoes )
-            err_msg = sprintf('Invalid echo number. Echo number set to 1.')
-            my_echo = 1;
-        end
-    end
 
-    if ( num_channels == -1 )
-        % Zero pad rows
-        raw_frames = zeros(rc_xres, rc_yres, nreceivers);
+    raw_frames = zeros(rc_xres, rc_yres, nreceivers);
     
-        for r=1:nreceivers
-        % Compute offset in bytes to start of frame.  (skip baseline view)
-            file_offset = pfile_header_size + ((r - 1)*mslice_size) + ...
-                  + ((my_slice -1)*slice_size) + ...
-                  + ((my_echo-1)*echo_size) + ...
-                  + (frame_size);
-
-            status = fseek(fid, file_offset, 'bof');
-
-            % read data: point_size = 2 means 16 bit data, point_size = 4 means EDR )
-            if (point_size == 2 )
-                [raw_data, count] = fread(fid, data_elements, 'integer*2');
-            else
-                [raw_data, count] = fread(fid, data_elements, 'integer*4');
-            end
-
-            %frame_data = zeros(da_xres);
-            for j = 1:(da_yres -1)
-                row_offset = (j-1)*da_xres*2;
-                for m = 1:da_xres
-                    raw_frames(m,j,r) = raw_data( ((2*m)-1) + row_offset) + i*raw_data((2*m) + row_offset);
-                end
-            end
-        end
-    else
-       
-        % Zero pad rows
-        raw_frames = zeros(rc_xres, rc_yres, 1);
-        my_receiver = 1;
-        if ( nreceivers > 1 )
-            recv_msg = sprintf('Enter the receiver number: [1..%d]',nreceivers);
-            my_receiver = input(recv_msg);
-            if (my_receiver > nreceivers)
-                err_msg = sprintf('Invalid receiver number. Receiver number set to 1.')
-                my_receiver = 1;
-            end
-        end
-        file_offset = pfile_header_size + ((my_receiver - 1)*mslice_size) + ...
+    for r=1:nreceivers
+    % Compute offset in bytes to start of frame.  (skip baseline view)
+        file_offset = pfile_header_size + ((r - 1)*mslice_size) + ...
                   + ((my_slice -1)*slice_size) + ...
                   + ((my_echo-1)*echo_size) + ...
                   + (frame_size);
@@ -201,17 +184,17 @@ function [raw_frames, alternate] = getChannelData(pfile, slice_no, num_channels)
         for j = 1:(da_yres -1)
             row_offset = (j-1)*da_xres*2;
             for m = 1:da_xres
-                raw_frames(m,j,1) = raw_data( ((2*m)-1) + row_offset) + i*raw_data((2*m) + row_offset);
+                raw_frames(m,j,r) = raw_data( ((2*m)-1) + row_offset) + i*raw_data((2*m) + row_offset);
             end
         end
     end
-
+    
     fclose(fid);
     
-     if (( rhtype == 1) | (rhtype == 64)) 
-         alternate = 1;
-     else
-         alternate = 0;
-     end
+    if (( rhtype == 1) | (rhtype == 64)) % Alteration Vector flag
+         chop = 1;
+    else
+         chop = 0;
+    end
      
 end

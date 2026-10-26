@@ -11,7 +11,9 @@ function displayMagnitude(raw_frames, plotString, logMagnitude)
     num_frames = size(raw_frames,3);
     figure;
     for i=1:num_frames
-        subplot(2,4,i);
+        if num_frames > 1
+            subplot(2,4,i);
+        end
         if (logMagnitude == 1)
             imagesc(log(abs(raw_frames(:,:,i))));
         else
